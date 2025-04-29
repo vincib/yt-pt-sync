@@ -30,13 +30,6 @@ $conf=[
         /* Your browser name, to tell yt-dlp which cookies to search for */
     "browser" => "chromium",
     
-        /* This could be either : "system" (to use system notification on KDE or Gnome),
-           "something@something" to send a mail using sendmail,
-           or "https://something" to call this url with some parameters
-           or empty to not send any notification
-        */
-    "notification" => "",
-
         /* Log File to append to, if "syslog" will log to Syslog on LOCAL0. if unset, logs to stderr */
     "log-file" => "/var/log/yt-pt-sync/yt-pt-sync.log",
 

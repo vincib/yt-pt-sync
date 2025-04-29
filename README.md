@@ -15,5 +15,9 @@ Also, it optimizes the number of calls to YouTube to prevent them from blacklist
 * a local browser with cookies connected to a Youtube account with subscriptions to the channels you want to mirror.
 * util-linux to get flock for the crontab locking ;)
 
+then fill config.php (copy from config.sample.php)
+
+then define a crontab for your user (the same user that uses a browser connected to a youtube account ;) ). Uses the "crontab" file as an example.
+
 
 
