@@ -24,7 +24,11 @@ $cache=false;
 if (is_file("cache/cache.json")) {
     $cache=@json_decode(file_get_contents("cache/cache.json"),true);
 }
-if (!$cache) $cache=["yt-dlp"=>0, "syncs" => []];
+
+// yt-dlp = timestamp of last yt-dlp update
+// sync = array of youtube ID that I already synchronized. each ID is the key and the timestamp of download is the value
+// channelid = array of peertube fqdn + - + channel name as key and channelID as value
+if (!$cache) $cache=["yt-dlp"=>0, "sync" => [], "channelid" => []];
 
 // Try to update yt-dlp every day
 if ($cache['yt-dlp']< (time()-86400)) {
@@ -52,7 +56,7 @@ foreach($out as $one) {
                 logme(LOG_INFO,"I downloaded ".$data["id"]." successfully.");
                 $cache["sync"][$data["id"]]=time();
             } else {
-                logme(LOG_ERROR,"I failed to download ".$data["id"].". Please check details above.");
+                logme(LOG_ERR,"I failed to download ".$data["id"].". Please check details above.");
             }
         } else {
             logme(LOG_DEBUG,"skipping ".$data["id"]." already got it");

@@ -16,7 +16,7 @@ function is_my_gateway_fast() {
     $out=[];
     exec("ip route list",$out,$res);
     if ($res!=0) {
-        logme(LOG_ERROR,"Can't list the routes. is-my-gateway-fast will be inaccurate. please check that 'ip route list' is allowed");
+        logme(LOG_ERR,"Can't list the routes. is-my-gateway-fast will be inaccurate. please check that 'ip route list' is allowed");
         return true;
     }
     $gateway="";
@@ -81,10 +81,199 @@ function logme($level,$message) {
 }
 
 
+/* -------------------------------------------------------------------------------- */
+/** Authenticate on a Peertube server using oAuth
+ */
+function apioAuth2($instance,$username,$password) {
 
+    $res1=file_get_contents("https://".$instance."/api/v1/oauth-clients/local");
+    $res1=json_decode($res1);
+    if (!isset($res1->client_id) || !isset($res1->client_secret)) {
+        logme(LOG_ERR,"Can't oauth-clients on $instance");
+        return false;
+    }
+    $ch = curl_init("https://".$instance."/api/v1/users/token");
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_USERAGENT, 'yt-pt-sync');
+    curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    $postfields="client_id=".$res1->client_id."&".
+               "client_secret=".$res1->client_secret."&".
+               "grant_type=password&".
+               "response_type=code&".
+               "username=".$username."&".
+               "password=".$password
+               ;
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
+
+    $headers = array(
+        'Content-type: application/x-www-form-urlencoded',
+    );
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+    $return = curl_exec($ch);
+    curl_close($ch);
+    $res=json_decode($return);
+    if (isset($res->access_token)) {
+        return $res->access_token;
+    } else {
+        logme(LOG_ERR,"Can't auth to $instance for user $username");
+        return false;
+    }
+}
+
+
+/* ------------------------------------------------------------------------------------------ */
+/** Get a Channel object (mainly it's ID) from its name
+ */
+function apiGetChannel($instance,$bearer, $channelname) {
+    $ch = curl_init("https://".$instance."/api/v1/video-channels/".$channelname);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_USERAGENT, 'yt-pt-sync');
+    curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    $headers = array(
+        'Authorization: Bearer '.$bearer,
+    );
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    $return = curl_exec($ch);
+    curl_close($ch);
+    return json_decode($return,true);
+}
+
+
+/* ------------------------------------------------------------------------------------------ */
+/** Upload a video to a peertube instance,
+ */
+function apiUpload($instance, $bearer, $channelid, $title, $description, $file) {
+    $ch = curl_init("https://".$instance."/api/v1/videos/upload");
+    $cFile = curl_file_create($file);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_USERAGENT, 'yt-pt-sync');
+    curl_setopt($ch, CURLOPT_TIMEOUT, 600); // big timeout : upload may be LARGE 
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+    $postfields=array(
+        "channelId" => $channelid,
+        "name" => $title,
+        "commentsPolicy" => 2,
+        "downloadEnabled" => false,
+        "generateTranscription" => true,
+        "language" => "fr", /* @TODO: configure me */
+        "generateTranscription" => true, /* @TODO: configure me */
+        "privacy" => 1,
+        "description" => $description,
+        "licence" => 6,
+        "videofile" => $cFile,
+    );
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
+
+    $headers = array(
+        //        'Content-type: multipart/form-data',
+        'Authorization: Bearer '.$bearer,
+    );
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    $return = curl_exec($ch);
+    curl_close($ch);
+    return json_decode($return,true);
+}
+
+
+/* -------------------------------------------------------------------------------- */
+/** download the video having YouTube id $id to the channel $channel
+ * id = something like dQw4w9WgXcQ
+ * channel = the hash in config.php for this instance.
+ */
 function download($id,$channel) {
+    global $conf;
+    
     // I didn't add --write-auto-subs so that we don't take YT (somehow crappy) auto subs and prefer our whisper ones :) 
     // ./yt-dlp --cookies-from-browser chromium --write-subs --sub-langs fr --write-info-json --output "3peDwxfPVE4" "https://www.youtube.com/watch?v=3peDwxfPVE4"
     // in json I have "ext" that tells the extension of the saved file.
+    logme(LOG_INFO,'Launching yt-dlp on '.$id);
+    passthru('./yt-dlp --cookies-from-browser '.$conf['browser'].' --write-subs --sub-langs '.$conf['sub-langs'].' --write-info-json --output cache/'.$id.' "https://www.youtube.com/watch?v='.$id.'"',$res);
+    logme(LOG_INFO,'Finished yt-dlp on '.$id);
+
+    // read info.json, get the extension. should be webm or mp4
+    if (!is_file('cache/'.$id.'.info.json')) {
+        logme(LOG_ERR,'no '.$id.'.info.json, skipping this one');
+        return false;
+    }
+    $data=json_decode(file_get_contents('cache/'.$id.'.info.json'),true);
+    if (!$data) {
+        logme(LOG_ERR,"can't decode info.json, skipping this video");
+        return false;
+    }
+    if ($data["ext"]!="webm" && $data["ext"]!="mp4") { 
+        logme(LOG_ERR,'extension is neither webm nor mp4 but '.$data['ext'].' skipping');
+        return false;
+    }
+    if (filesize('cache/'.$id.'.'.$data['ext'])<1048576) {
+        logme(LOG_ERR,'file too small, something is wrong '.filesize('cache/'.$id.'.'.$data['ext']).' skipping');
+        return false;        
+    }
+
+    return upload($id,$channel,$data);    
+}
+
+
+/* -------------------------------------------------------------------------------- */
+/** upload to peertube
+ */
+function upload($id,$channel,$data) {
+    global $conf,$cache;
+    
+    // log into the peertube account.
+    $bearer=apioAuth2($channel[0],$channel[1],$channel[2]);
+    if (!$bearer) {
+        logme(LOG_ERR,"Can't log into peertube, see message above");
+        return false;
+    }
+
+    // if we don't have the channel_id for this instance+channel, we get it using the API
+    if (!isset($cache["channelid"][$channel[0]."-".$channel[3]])) {
+        $cid=apiGetChannel($channel[0],$bearer,$channel[3]);
+        if (!$cid) {
+            logme(LOG_ERR,"Can't find channel ".$channel[3]);
+            return false;
+        }
+        $cache["channelid"][$channel[0]."-".$channel[3]]=$cid["id"];
+    }
+    
+    // now we upload to peertube using the info and the file we got:
+    // fulltitle description
+    logme(LOG_INFO,"Uploading ".$id." to ".$channel[0]." channel ".$channel[3]);
+    $uploaded = apiUpload($channel[0],$bearer,
+              $cache['channelid'][$channel[0]."-".$channel[3]],
+              $data['fulltitle'],$data['description'],'cache/'.$id.'.'.$data['ext']);
+    if (!$uploaded) {
+        logme(LOG_ERR,"Can't upload ". $id." to ".$channel[0]." ".$channel[3] );
+        return false;
+    }
+    $uuid=$uploaded["video"]["shortUUID"];
+    // save it in cache for information
+    logme(LOG_INFO,"Uploaded on ".$channel[0]." as ".$uuid);
+    file_put_contents('cache/data',date('Y-m-d H:i:s').' '.$id.' '.$channel[0].' '.$uuid."\n",FILE_APPEND);
+    // {"video":{"id":39750,"shortUUID":"tZuXzLCvNtvarZnvt6RYYC","uuid":"e2adfc22-bbfd-4100-b508-093c2a7be84c"}}
+
+    uploadSubtitles($id,$channel,$uuid);
+
     return true;
 }
+
+
+/* -------------------------------------------------------------------------------- */
+/** Upload subtitles of videos already uploaded to peertube
+ */ 
+function uploadSubtitles($id,$channel,$uuid) {
+    global $conf;
+    $langs=explode(",",$conf["sub-langs"]);
+    foreach($langs as $lang) {
+        if (is_file('cache/'.$id.'.'.$lang.'.vtt')) {
+            // upload me
+            logme(LOG_INFO,"HERE I SHOULD UPLOAD THE ".$lang." SUBTITLE...");
+        }
+    }
+}
+

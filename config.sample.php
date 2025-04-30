@@ -10,11 +10,11 @@ $conf=[
     "good-macs" => [ "cd:6a:88:32:0c:58", "fd:a5:8c:c0:74:2b" ],
     
         /* List of Youtube channels that you want to mirror on Peertube channels.
-           For each youtube channel, you need to tell the Peertube URL, Login, Password and Channel
+           For each youtube channel, you need to tell the Peertube URL (no /, no https, just the FQDN), Login, Password and Channel
            "my-yt-channel" should be the channel ID not the name. uses php get-channel-id.php <yt url> to know a yt channel ID from a channel name.
         */
     "sync" => [
-        "my-yt-channel" => [ "https://mypeertube", "login", "password", "pt-channel-name"  ],
+        "my-yt-channel" => [ "mypeertube.org", "login", "password", "pt-channel-name"  ],
     ],
 
         /* how many videos we scan on our playlist each hour.
