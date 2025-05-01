@@ -146,7 +146,7 @@ function apiGetChannel($instance,$bearer, $channelname) {
 /* ------------------------------------------------------------------------------------------ */
 /** Upload a video to a peertube instance,
  */
-function apiUpload($instance, $bearer, $channelid, $title, $description, $videofile, $thumbnailfile=null) {
+function apiUpload($instance, $bearer, $channelid, $title, $description, $videofile) {
     $ch = curl_init("https://".$instance."/api/v1/videos/upload");
     $cvFile = curl_file_create($videofile);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -167,10 +167,6 @@ function apiUpload($instance, $bearer, $channelid, $title, $description, $videof
         "licence" => 6,
         "videofile" => $cvFile,
     ); 
-    if (!is_null($thumbnailfile)) {
-        $ctFile = curl_file_create($thumbnailfile);
-        $postfields["thumbnailfile"] = $ctFile;
-    }
     curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
     
     $headers = array(
@@ -180,6 +176,45 @@ function apiUpload($instance, $bearer, $channelid, $title, $description, $videof
     $return = curl_exec($ch);
     curl_close($ch);
     return json_decode($return,true);
+}
+
+
+/* ------------------------------------------------------------------------------------------ */
+/** Modify a video on a peertube instance,
+ */
+function apiEditVideo($instance, $bearer, $uuid, $title=null, $description=null, $thumbnail=null) {
+    $ch = curl_init("https://".$instance."/api/v1/videos/".$uuid);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_USERAGENT, 'yt-pt-sync');
+    curl_setopt($ch, CURLOPT_TIMEOUT, 1800); // big timeout : upload may be LARGE 
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PUT");
+    $postfields=[];
+    if (!is_null($thumbnail)) {
+        $ctFile = curl_file_create($thumbnail);
+        $atype=["jpg" => "image/jpeg", "jpeg" => "image/jpeg", "png" => "image/png", "webp" => "image/webp" ];
+        $ctFile->setMimeType($atype[pathinfo($thumbnail, PATHINFO_EXTENSION)]);
+        $postfields["thumbnailfile"]=$ctFile;
+    }
+    if (!is_null($title)) {
+        $postfields["name"]=$title;
+    }
+    if (!is_null($description)) {
+        $postfields["description"]=$description;
+    }
+
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
+    
+    $headers = array(
+        'Content-type: multipart/form-data',
+        'Authorization: Bearer '.$bearer,
+    );
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    $return = curl_exec($ch);
+    $code=curl_getinfo($ch,CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    // return code should be 204  & no content
+    return ($code==204);
 }
 
 
@@ -259,36 +294,45 @@ function upload($id,$channel,$data) {
         }
         $cache["channelid"][$channel[0]."-".$channel[3]]=$cid["id"];
     }
-
-    // get the thumbnail :
-    $thumbnail=null;
-    if (isset($data["thumbnail"])) {
-        $ext=pathinfo(parse_url($data["thumbnail"],PHP_URL_PATH), PATHINFO_EXTENSION);
-        if ($ext=="webm" || $ext=="jpg") {
-            getThumbnail($data["thumbnail"],"cache/".$id."-thumb.".$ext);
-            $thumbnail="cache/".$id."-thumb.".$ext;
-            logme(LOG_INFO,"Got thumnbnail of size ".filesize($thumbnail));
-        } else {
-            logme(LOG_ERR,"Thumbnail ext is $ext, weird");
-        }
-    }
     
     // now we upload to peertube using the info and the file we got:
     // fulltitle description
     logme(LOG_INFO,"Uploading ".$id." to ".$channel[0]." channel ".$channel[3]);
     $uploaded = apiUpload($channel[0],$bearer,
                           $cache['channelid'][$channel[0]."-".$channel[3]],
-                          $data['fulltitle'],$data['description'],'cache/'.$id.'.'.$data['ext'], $thumbnail);
+                          $data['fulltitle'],$data['description'],'cache/'.$id.'.'.$data['ext']);
+    // $uploaded = {"video":{"id":39750,"shortUUID":"tZuXzLCvNtvarZnvt6RYYC","uuid":"e2adfc22-bbfd-4100-b508-093c2a7be84c"}}
 
     if (!$uploaded) {
         logme(LOG_ERR,"Can't upload ". $id." to ".$channel[0]." ".$channel[3] );
         return false;
     }
+    if (!isset($uploaded["video"])) {
+        logme(LOG_ERR,"Upload failed, result was ".json_encode($uploaded));
+        return false;
+    }
     $uuid=$uploaded["video"]["shortUUID"];
+
+    
+    // get the thumbnail :
+    $thumbnail=null;
+    if (isset($data["thumbnail"])) {
+        $ext=pathinfo(parse_url($data["thumbnail"],PHP_URL_PATH), PATHINFO_EXTENSION);
+        if ($ext=="webp" || $ext=="jpg") {
+            getThumbnail($data["thumbnail"],"cache/".$id."-thumb.".$ext);
+            $thumbnail="cache/".$id."-thumb.".$ext;
+            logme(LOG_INFO,"Got thumnbnail of size ".filesize($thumbnail)." uploading");
+            // save the thumbnail:
+            $result=apiEditVideo($channel[0],$bearer, $uuid, null, null, $thumbnail);
+            logme(LOG_INFO,"After thumbnail upload: ".$result);
+        } else {
+            logme(LOG_ERR,"Thumbnail ext is $ext, weird");
+        }
+    }
+
     // save it in cache for information
     logme(LOG_INFO,"Uploaded on ".$channel[0]." as ".$uuid);
     file_put_contents('cache/data',date('Y-m-d H:i:s').' '.$id.' '.$channel[0].' '.$uuid."\n",FILE_APPEND);
-    // {"video":{"id":39750,"shortUUID":"tZuXzLCvNtvarZnvt6RYYC","uuid":"e2adfc22-bbfd-4100-b508-093c2a7be84c"}}
 
     uploadSubtitles($id,$channel,$uuid);
 
@@ -310,3 +354,15 @@ function uploadSubtitles($id,$channel,$uuid) {
     }
 }
 
+function searchDataByYtId($id) {
+    $f=fopen('cache/data','rb');
+    while($s=fgets($f,1024)) {
+        $fields=explode(' ',trim($s));
+        if ($fields[2]==$id) {
+            fclose($f);
+            return $fields;
+        }
+    }
+    fclose($f);
+    return false;
+}
