@@ -29,6 +29,13 @@ Then, test the script by launching it first with : `php yt-pt-sync.php`
 If you want to launch it periodically, define a crontab for your user (the same user that uses a browser connected to a youtube account ;) ). Uses the "crontab" file as an example. To edit your user's crontab, use the command `crontab -e`
 
 
+## Other commands
+
+There are other commands you can use :
+
+* `php upload_one.php <youtube-id>` to upload 1 youtube video from its ID to the automatically chosen good peertube channel
+* `edit-thumbnail.php <youtube-id>` to upload the thumbnail of a video (you will need the file <id>.info.json in the cache folder).
+
 
 
 
