@@ -27,6 +27,9 @@ $conf=[
         /* which languages (separated by comma, see yt-dlp --help option "--sub-langs". Note that this applies to ALL syncs */
     "sub-langs" => "fr",
 
+        /* Which user agent is used when getting thumbnails (only) */
+    "user-agent" => "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+    
         /* Your browser name, to tell yt-dlp which cookies to search for */
     "browser" => "chromium",
     

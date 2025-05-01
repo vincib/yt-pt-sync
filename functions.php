@@ -146,12 +146,12 @@ function apiGetChannel($instance,$bearer, $channelname) {
 /* ------------------------------------------------------------------------------------------ */
 /** Upload a video to a peertube instance,
  */
-function apiUpload($instance, $bearer, $channelid, $title, $description, $file) {
+function apiUpload($instance, $bearer, $channelid, $title, $description, $videofile, $thumbnailfile=null) {
     $ch = curl_init("https://".$instance."/api/v1/videos/upload");
-    $cFile = curl_file_create($file);
+    $cvFile = curl_file_create($videofile);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_USERAGENT, 'yt-pt-sync');
-    curl_setopt($ch, CURLOPT_TIMEOUT, 600); // big timeout : upload may be LARGE 
+    curl_setopt($ch, CURLOPT_TIMEOUT, 1800); // big timeout : upload may be LARGE 
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
     $postfields=array(
@@ -159,24 +159,43 @@ function apiUpload($instance, $bearer, $channelid, $title, $description, $file) 
         "name" => $title,
         "commentsPolicy" => 2,
         "downloadEnabled" => false,
-        "generateTranscription" => true,
         "language" => "fr", /* @TODO: configure me */
         "generateTranscription" => true, /* @TODO: configure me */
+        "waitTranscoding" => true, 
         "privacy" => 1,
         "description" => $description,
         "licence" => 6,
-        "videofile" => $cFile,
-    );
+        "videofile" => $cvFile,
+    ); 
+    if (!is_null($thumbnailfile)) {
+        $ctFile = curl_file_create($thumbnailfile);
+        $postfields["thumbnailfile"] = $ctFile;
+    }
     curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-
+    
     $headers = array(
-        //        'Content-type: multipart/form-data',
         'Authorization: Bearer '.$bearer,
     );
     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
     $return = curl_exec($ch);
     curl_close($ch);
     return json_decode($return,true);
+}
+
+
+/* ------------------------------------------------------------------------------------------ */
+/** Get the thumbnail of a video. Uses User-Agent.
+ */
+function getThumbnail($url,$file) {
+    global $conf;
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_USERAGENT, $conf["user-agent"]);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 60); // big timeout : upload may be LARGE 
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    $return = curl_exec($ch);
+    curl_close($ch);
+    file_put_contents($file,$return);
 }
 
 
@@ -240,13 +259,27 @@ function upload($id,$channel,$data) {
         }
         $cache["channelid"][$channel[0]."-".$channel[3]]=$cid["id"];
     }
+
+    // get the thumbnail :
+    $thumbnail=null;
+    if (isset($data["thumbnail"])) {
+        $ext=pathinfo(parse_url($data["thumbnail"],PHP_URL_PATH), PATHINFO_EXTENSION);
+        if ($ext=="webm" || $ext=="jpg") {
+            getThumbnail($data["thumbnail"],"cache/".$id."-thumb.".$ext);
+            $thumbnail="cache/".$id."-thumb.".$ext;
+            logme(LOG_INFO,"Got thumnbnail of size ".filesize($thumbnail));
+        } else {
+            logme(LOG_ERR,"Thumbnail ext is $ext, weird");
+        }
+    }
     
     // now we upload to peertube using the info and the file we got:
     // fulltitle description
     logme(LOG_INFO,"Uploading ".$id." to ".$channel[0]." channel ".$channel[3]);
     $uploaded = apiUpload($channel[0],$bearer,
-              $cache['channelid'][$channel[0]."-".$channel[3]],
-              $data['fulltitle'],$data['description'],'cache/'.$id.'.'.$data['ext']);
+                          $cache['channelid'][$channel[0]."-".$channel[3]],
+                          $data['fulltitle'],$data['description'],'cache/'.$id.'.'.$data['ext'], $thumbnail);
+
     if (!$uploaded) {
         logme(LOG_ERR,"Can't upload ". $id." to ".$channel[0]." ".$channel[3] );
         return false;
