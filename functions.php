@@ -158,10 +158,10 @@ function apiUpload($instance, $bearer, $channelid, $title, $description, $videof
         "channelId" => $channelid,
         "name" => $title,
         "commentsPolicy" => 2,
-        "downloadEnabled" => false,
+        "downloadEnabled" => "false",
         "language" => "fr", /* @TODO: configure me */
-        "generateTranscription" => true, /* @TODO: configure me */
-        "waitTranscoding" => true, 
+        "generateTranscription" => "true", /* @TODO: configure me */
+        "waitTranscoding" => "true", 
         "privacy" => 1,
         "description" => $description,
         "licence" => 6,
