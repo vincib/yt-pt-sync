@@ -40,6 +40,7 @@ if ($cache['yt-dlp']< (time()-86400)) {
 if (!isset($conf["debug"])) $conf["debug"]=false;
 if (!isset($conf["max"])) $conf["max"]=30;
 
+$didsomething=0;
 // get the list of the latest subscribed videos from my feed using my cookies
 $out=[];
 exec('yt-dlp --flat-playlist --cookies-from-browser '.$conf['browser'].' --dump-json --skip-download --playlist-items 1:'.$conf['max'].' https://www.youtube.com/feed/subscriptions',$out,$res);
@@ -52,6 +53,7 @@ foreach($out as $one) {
         // did we already take it?
         if (!isset($cache["sync"][$data["id"]])) {
             logme(LOG_DEBUG,"will download ".$data["id"]." for channel ".$conf["sync"][$data["channel_id"]][3]);
+            $didsomething++;
             if (download($data["id"],$conf["sync"][$data["channel_id"]])) {
                 logme(LOG_INFO,"I downloaded ".$data["id"]." successfully.");
                 $cache["sync"][$data["id"]]=time();
@@ -69,6 +71,8 @@ foreach($out as $one) {
 
 // save the cache in the end.
 file_put_contents("cache/cache.json",json_encode($cache));
+
+logme(LOG_INFO,"Finishing after downloading ".$didsomething." videos");
 
 
 

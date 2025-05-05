@@ -245,7 +245,7 @@ function download($id,$channel) {
     // I didn't add --write-auto-subs so that we don't take YT (somehow crappy) auto subs and prefer our whisper ones :) 
     // ./yt-dlp --cookies-from-browser chromium --write-subs --sub-langs fr --write-info-json --output "3peDwxfPVE4" "https://www.youtube.com/watch?v=3peDwxfPVE4"
     // in json I have "ext" that tells the extension of the saved file.
-    logme(LOG_INFO,'Launching yt-dlp on '.$id);
+    logme(LOG_INFO,'Launching yt-dlp on '.$id.' for channel '.$channel[0].' '.$channel[3]);
     passthru('./yt-dlp --cookies-from-browser '.$conf['browser'].' --write-subs --sub-langs '.$conf['sub-langs'].' --write-info-json --output cache/'.$id.' "https://www.youtube.com/watch?v='.$id.'"',$res);
     logme(LOG_INFO,'Finished yt-dlp on '.$id);
 
@@ -259,8 +259,8 @@ function download($id,$channel) {
         logme(LOG_ERR,"can't decode info.json, skipping this video");
         return false;
     }
-    if ($data["ext"]!="webm" && $data["ext"]!="mp4") { 
-        logme(LOG_ERR,'extension is neither webm nor mp4 but '.$data['ext'].' skipping');
+    if ($data["ext"]!="webm" && $data["ext"]!="mp4" && $data["ext"]!="mkv") { 
+        logme(LOG_ERR,'extension is neither webm nor mp4 or mkv but '.$data['ext'].' skipping');
         return false;
     }
     if (filesize('cache/'.$id.'.'.$data['ext'])<1048576) {
