@@ -146,7 +146,7 @@ function apiGetChannel($instance,$bearer, $channelname) {
 /* ------------------------------------------------------------------------------------------ */
 /** Upload a video to a peertube instance,
  */
-function apiUpload($instance, $bearer, $channelid, $title, $description, $videofile) {
+function apiUpload($instance, $bearer, $channelid, $title, $description, $videofile, $publishdate=null) {
     $ch = curl_init("https://".$instance."/api/v1/videos/upload");
     $cvFile = curl_file_create($videofile);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -158,15 +158,20 @@ function apiUpload($instance, $bearer, $channelid, $title, $description, $videof
         "channelId" => $channelid,
         "name" => $title,
         "commentsPolicy" => 2,
-        "downloadEnabled" => "false",
+        "downloadEnabled" => "true",
         "language" => "fr", /* @TODO: configure me */
-        "generateTranscription" => "true", /* @TODO: configure me */
+        //        "generateTranscription" => "true", /* @TODO: configure me */
         "waitTranscoding" => "true", 
         "privacy" => 1,
-        "description" => $description,
         "licence" => 6,
         "videofile" => $cvFile,
-    ); 
+    );
+    if ($description) {
+        $postfields["description"] = $description;
+    }
+    if (!is_null($publishdate)) {
+        $postfields["originallyPublishedAt"]=$publishdate;
+    }
     curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
     
     $headers = array(
@@ -300,7 +305,9 @@ function upload($id,$channel,$data) {
     logme(LOG_INFO,"Uploading ".$id." to ".$channel[0]." channel ".$channel[3]);
     $uploaded = apiUpload($channel[0],$bearer,
                           $cache['channelid'][$channel[0]."-".$channel[3]],
-                          $data['fulltitle'],$data['description'],'cache/'.$id.'.'.$data['ext']);
+                          $data['fulltitle'],$data['description'],'cache/'.$id.'.'.$data['ext'],
+                          substr(date("c",$data["timestamp"]),0,19)."Z"
+    );
     // $uploaded = {"video":{"id":39750,"shortUUID":"tZuXzLCvNtvarZnvt6RYYC","uuid":"e2adfc22-bbfd-4100-b508-093c2a7be84c"}}
 
     if (!$uploaded) {

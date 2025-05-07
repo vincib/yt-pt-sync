@@ -36,6 +36,14 @@ There are other commands you can use :
 * `php upload_one.php <youtube-id>` to upload 1 youtube video from its ID to the automatically chosen good peertube channel
 * `edit-thumbnail.php <youtube-id>` to upload the thumbnail of a video (you will need the file <id>.info.json in the cache folder).
 
+## How to do an initial mirror :
+
+yt-dlp --flat-playlist --cookies-from-browser chromium --dump-json --skip-download "https://www.youtube.com/channelname/videos" >name.json
+cat name.json |sed -e 's/.*"id": "\([^"]*\)".*/\1/' > allids
+for i in $(cat allids) ; do php upload-one.php $i ; done
+
+
+
 
 
 

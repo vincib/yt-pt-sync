@@ -48,6 +48,10 @@ logme(LOG_DEBUG,"got ".count($out)." videos...");
 
 foreach($out as $one) {
     $data=json_decode($one,true);
+    if (isset($data["is_live"]) && $data["is_live"]) {
+        logme(LOG_INFO,"Live detected for ".$data["id"]." skipping...\n");
+        continue;
+    }
     // is it a video of a channel I want to mirror ?
     if (isset($conf["sync"][$data["channel_id"]])) {
         // did we already take it?
