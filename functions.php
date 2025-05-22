@@ -251,7 +251,16 @@ function download($id,$channel) {
     // ./yt-dlp --cookies-from-browser chromium --write-subs --sub-langs fr --write-info-json --output "3peDwxfPVE4" "https://www.youtube.com/watch?v=3peDwxfPVE4"
     // in json I have "ext" that tells the extension of the saved file.
     logme(LOG_INFO,'Launching yt-dlp on '.$id.' for channel '.$channel[0].' '.$channel[3]);
-    passthru('./yt-dlp --cookies-from-browser '.$conf['browser'].' --write-subs --sub-langs '.$conf['sub-langs'].' --write-info-json --output cache/'.$id.' "https://www.youtube.com/watch?v='.$id.'"',$res);
+    $command='./yt-dlp --cookies-from-browser '.$conf['browser'].' --write-subs --sub-langs '.$conf['sub-langs'].' --write-info-json --output cache/'.$id.' "https://www.youtube.com/watch?v='.$id.'"';
+    //logme(LOG_DEBUG,'Launching yt-dlp as '.$command);
+    passthru($command,$res);
+    if ($res!=0) {
+        // search for "Requested format is not available." if we find it, retry without cookies...
+        // for now just retry without cookies :)
+        logme(LOG_ERR,"failed, retrying without cookies ... because why not");
+        $command='./yt-dlp --write-subs --sub-langs '.$conf['sub-langs'].' --write-info-json --output cache/'.$id.' "https://www.youtube.com/watch?v='.$id.'"';
+        passthru($command,$res);        
+    }
     logme(LOG_INFO,'Finished yt-dlp on '.$id);
 
     // read info.json, get the extension. should be webm or mp4
