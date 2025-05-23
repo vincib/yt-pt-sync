@@ -277,6 +277,10 @@ function download($id,$channel) {
         logme(LOG_ERR,'extension is neither webm nor mp4 or mkv but '.$data['ext'].' skipping');
         return false;
     }
+    if (file_exists('cache/'.$id)) {
+        rename('cache/'.$id,'cache/'.$id.'.'.$data['ext']);
+    }
+    
     if (filesize('cache/'.$id.'.'.$data['ext'])<1048576) {
         logme(LOG_ERR,'file too small, something is wrong '.filesize('cache/'.$id.'.'.$data['ext']).' skipping');
         return false;        
